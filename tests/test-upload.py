@@ -9,16 +9,14 @@ import urllib2_file
 import urllib2
 import urllib
 import string
-import cStringIO
 import StringIO
 import getopt
 
 def usage(progname):
-    print """SYNTAX: %s -u url [-s | -f filename]
+    print """SYNTAX: %s -u url -f filename [-s stringio_name]
 -f filename : upload this filename
--s          : upload StringIO file automatically generated
+-s name     : upload StringIO file 
 """
-
     sys.exit(1)
 	
 if __name__ == '__main__':
@@ -50,20 +48,21 @@ if __name__ == '__main__':
         print "need url= ..."
         usage(sys.argv[0])
 
-    if v_filename != "": 
-        # upload a file
-        print "url=%s upload filename=%s" % (v_url, v_filename)
-        fd = open(v_filename)
-    elif v_stringio_name != "":
+    if v_filename == "": 
+        print "ERROR: need args --filename=||-s"
+        usage(sys.argv[0])
+        sys.exit(1)
+
+    fd_file = open(v_filename)
+    if v_stringio_name != "":
         # upload a memory file
         print "url=%s upload StringIO memory file" % v_url
         fd = StringIO.StringIO()
-        print dir(fd)
         fd.name = v_stringio_name
-        fd.write("pouet pouet")
+        fd.write(fd_file.read())
     else:
-        print "need args --filename=||-s"
-        usage(sys.argv[0])
+        print "url=%s upload filename=%s" % (v_url, v_filename)
+        fd =  fd_file
 	
     post_data = {'file': fd }
     try:

@@ -98,14 +98,22 @@ def send_data(v_vars, v_files, boundary, sock=None):
         l += len(buffer)
     for (k, v) in v_files:
         fd = v
-    	# Special case for StringIO
-        if fd.__module__ in ("StringIO", "cStringIO"):
+        
+        if not hasattr(fd, 'read'):
+            raise TypeError("file descriptor MUST have read attribute")
+ 
+        if hasattr(fd, 'fileno'):
+            # a File
+            file_size = os.fstat(fd.fileno())[stat.ST_SIZE]
+            fd.seek(0)
+        elif hasattr(fd, 'len'):
+            # StringIO
             name = k
-            fd.seek(0, 2) # EOF
-            file_size = fd.tell()
+            file_size = fd.len
             fd.seek(0) # START
         else:
-            file_size = os.fstat(fd.fileno())[stat.ST_SIZE]
+            raise TypeError("file descriptor might be File of StringIO but MUST have fileno or len attribute")
+
         name = fd.name.split('/')[-1]
         if isinstance(name, unicode):
             name = name.encode('UTF-8')
@@ -122,12 +130,14 @@ def send_data(v_vars, v_files, boundary, sock=None):
             sock.send(buffer)
             if hasattr(fd, 'seek'):
                 fd.seek(0)
-        while True:
-            chunk = fd.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            if sock:
-                sock.send(chunk)
+        # read file only of sock is defined
+        if sock:
+            while True:
+                chunk = fd.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                if sock:
+                    sock.send(chunk)
         l += file_size
     buffer='\r\n'
     buffer += '--%s--\r\n' % boundary
