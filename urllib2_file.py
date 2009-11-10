@@ -104,6 +104,7 @@ def send_data(v_vars, v_files, boundary, sock=None):
  
         if hasattr(fd, 'fileno'):
             # a File
+            name = fd.name.split(os.path.sep)[-1]
             file_size = os.fstat(fd.fileno())[stat.ST_SIZE]
             fd.seek(0)
         elif hasattr(fd, 'len'):
@@ -114,7 +115,6 @@ def send_data(v_vars, v_files, boundary, sock=None):
         else:
             raise TypeError("file descriptor might be File of StringIO but MUST have fileno or len attribute")
 
-        name = fd.name.split('/')[-1]
         if isinstance(name, unicode):
             name = name.encode('UTF-8')
         buffer=''
