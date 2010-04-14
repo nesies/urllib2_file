@@ -109,7 +109,7 @@ def send_data(v_vars, v_files, boundary, sock=None):
             fd.seek(0)
         elif hasattr(fd, 'len'):
             # StringIO
-            name = k
+            name = fd.name
             file_size = fd.len
             fd.seek(0) # START
         else:
@@ -183,7 +183,7 @@ class newHTTPHandler(urllib2.BaseHandler):
             raise urllib2.URLError('no host given')
         h = http_class(host) # will parse host:port
         if req.has_data():
-            h.putrequest('POST', req.get_selector())
+            h.putrequest(req.get_method(), req.get_selector())
             if not 'Content-type' in req.headers:
                 if len(v_files) > 0:
                     boundary = mimetools.choose_boundary()
@@ -197,7 +197,7 @@ class newHTTPHandler(urllib2.BaseHandler):
                     if not 'Content-length' in req.headers:
                         h.putheader('Content-length', '%d' % len(data))
         else:
-            h.putrequest('GET', req.get_selector())
+            h.putrequest(req.get_method(), req.get_selector())
 
         scheme, sel = urllib.splittype(req.get_selector())
         sel_host, sel_path = urllib.splithost(sel)
