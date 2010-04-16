@@ -1,4 +1,21 @@
-tested with
-python 2.3
-python 2.4
-python 2.5
+Python urllib2_file.py enable you to upload files using HTTP multipart/form-data
+
+Example:
+
+import urllib2_files
+import urllib2
+
+data = {
+        "foo":       "bar",
+        "libc.so.1": open("/lib/libc.so.1")
+    }
+u = urllib2.urlopen('http://site.com/path/upload.php' [, data])
+
+idea from:
+upload files in python:
+ http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
+
+Tested with:
+ python 2.3
+ python 2.4
+ python 2.5

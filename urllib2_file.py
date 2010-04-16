@@ -15,7 +15,7 @@
 # bug fix: kosh @T aesaeion.com
 # HTTPS support : Ryan Grow <ryangrow @T yahoo.com>
 
-# Copyright (C) 2004,2005,2006,2008,2009 Fabien SEISEN
+# Copyright (C) 2004,2005,2006,2008,2009,2010 Fabien SEISEN
 # 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,23 +49,15 @@ timeoutsocket.py: overriding Python socket API:
  http://www.timo-tasi.org/python/timeoutsocket.py
  http://mail.python.org/pipermail/python-announce-list/2001-December/001095.html
 
-import urllib2_files
+Example:
+
+import urllib2_file
 import urllib2
-u = urllib2.urlopen('http://site.com/path' [, data])
 
-data can be a mapping object or a sequence of two-elements tuples
-(like in original urllib2.urlopen())
-varname still need to be a string and
-value can be string of a file object
-eg:
-  ((varname, value),
-   (varname2, value),
-  )
-  or
-  { name:  value,
-    name2: value2
-  }
-
+data = { "foo":      "bar",
+         "libc.so.1": open("/lib/libc.so.1")
+}
+u = urllib2.urlopen('http://site.com/path/upload.php', data)
 """
 
 import httplib
@@ -85,8 +77,15 @@ def get_content_type(filename):
     return mimetypes.guess_type(filename)[0] or 'application/octet-stream'
 
 # if sock is None, return the estimate size
+
 def send_data(v_vars, v_files, boundary, sock=None):
-    l = 0
+    """Parse v_vars, v_files and create a buffer with HTTP multipart/form-data
+    if sock is set, send data to it
+        v_vars = {"key": "value"}
+        v_files = {"filename" : open("path/to/file"}
+    """
+
+    buffer_len = 0
     for (k, v) in v_vars:
         buffer=''
         buffer += '--%s\r\n' % boundary
@@ -95,37 +94,46 @@ def send_data(v_vars, v_files, boundary, sock=None):
         buffer += v + '\r\n'
         if sock:
             sock.send(buffer)
-        l += len(buffer)
+        buffer_len += len(buffer)
+
     for (k, v) in v_files:
         fd = v
-        
+        filename = k
+
+        if not hasattr(fd, 'seek'):
+            raise TypeError("file descriptor MUST have seek attribute")
+
         if not hasattr(fd, 'read'):
             raise TypeError("file descriptor MUST have read attribute")
- 
+
+        fd.seek(0)
         if hasattr(fd, 'fileno'):
             # a File
-            name = fd.name.split(os.path.sep)[-1]
             file_size = os.fstat(fd.fileno())[stat.ST_SIZE]
-            fd.seek(0)
-        elif hasattr(fd, 'len'):
-            # StringIO
-            name = fd.name
-            file_size = fd.len
-            fd.seek(0) # START
         else:
-            raise TypeError("file descriptor might be File of StringIO but MUST have fileno or len attribute")
+            # Final resort, read the entire message, and figure out the size
+            file_size = 0
+            while True:
+                chunk = fd.read(CHUNK_SIZE)
+                if chunk:
+                    # It's not necessarily going to be CHUNK_SIZE large, since
+                    # the last chunk is very likely < CHUNK_SIZE
+                    file_size += len(chunk)
+                else:
+                    break
+        fd.seek(0)
 
-        if isinstance(name, unicode):
-            name = name.encode('UTF-8')
-        buffer=''
+        if isinstance(filename, unicode):
+            filename = filename.encode('UTF-8')
+        buffer = ''
         buffer += '--%s\r\n' % boundary
-        buffer += 'Content-Disposition: form-data; name="%s"; filename="%s"\r\n' \
-                  % (k, name)
-        buffer += 'Content-Type: %s\r\n' % get_content_type(name)
+        buffer += 'Content-Disposition: form-data; filename="%s";\r\n' \
+                  % (filename)
+        buffer += 'Content-Type: %s\r\n' % get_content_type(filename)
         buffer += 'Content-Length: %s\r\n' % file_size
         buffer += '\r\n'
 
-        l += len(buffer)
+        buffer_len += len(buffer)
         if sock:
             sock.send(buffer)
             if hasattr(fd, 'seek'):
@@ -138,14 +146,14 @@ def send_data(v_vars, v_files, boundary, sock=None):
                     break
                 if sock:
                     sock.send(chunk)
-        l += file_size
-    buffer='\r\n'
+        buffer_len += file_size
+    buffer = '\r\n'
     buffer += '--%s--\r\n' % boundary
     buffer += '\r\n'
     if sock:
         sock.send(buffer)
-    l += len(buffer)
-    return l
+    buffer_len += len(buffer)
+    return buffer_len
 
 # mainly a copy of HTTPHandler from urllib2
 class newHTTPHandler(urllib2.BaseHandler):
@@ -154,8 +162,8 @@ class newHTTPHandler(urllib2.BaseHandler):
 
     def do_open(self, http_class, req):
         data = req.get_data()
-        v_files=[]
-        v_vars=[]
+        v_files = []
+        v_vars = []
         # mapping object (dict)
         if req.has_data() and type(data) != str:
             if hasattr(data, 'items'):
@@ -170,14 +178,14 @@ class newHTTPHandler(urllib2.BaseHandler):
                 
             for (k, v) in data:
                 if hasattr(v, 'read'):
-                    v_files.append((k, v))
+                    v_files.append( (k, v) )
                 else:
                     v_vars.append( (k, v) )
         # no file ? convert to string
         if len(v_vars) > 0 and len(v_files) == 0:
             data = urllib.urlencode(v_vars)
-            v_files=[]
-            v_vars=[]
+            v_files = []
+            v_vars = []
         host = req.get_host()
         if not host:
             raise urllib2.URLError('no host given')
@@ -216,7 +224,7 @@ class newHTTPHandler(urllib2.BaseHandler):
             raise urllib2.URLError(err)
 
         if req.has_data():
-            if len(v_files) >0:
+            if len(v_files) > 0:
                 l = send_data(v_vars, v_files, boundary, h)
             elif len(v_vars) > 0:
                 # if data is passed as dict ...
@@ -245,64 +253,3 @@ class newHTTPSHandler(newHTTPHandler):
     
 urllib2.HTTPSHandler = newHTTPSHandler
 
-if __name__ == '__main__':
-    import getopt
-    import urllib2
-    import urllib2_file
-    import string
-    import sys
-
-    def usage(progname):
-        print """
-SYNTAX: %s -u url -f file [-v]
-""" % progname
-    
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], 'hvu:f:')
-    except getopt.GetoptError, errmsg:
-        print "ERROR:", errmsg
-        sys.exit(1)
-
-    v_url = ''
-    v_verbose = 0
-    v_file = ''
-
-    for name, value in opts:
-        if name in ('-h',):
-            usage(sys.argv[0])
-            sys.exit(0)
-        elif name in ('-v',):
-            v_verbose += 1
-        elif name in ('-u',):
-            v_url = value
-        elif name in ('-f',):
-            v_file = value
-        else:
-            print "invalid argument:", name
-            sys.exit(2)
-
-    error = 0
-    if v_url == '':
-        print "need -u"
-        error += 1
-    if v_file == '':
-        print "need -f"
-        error += 1
-
-    if error > 0:
-        sys.exit(3)
-        
-    fd = open(v_file, 'r')
-    data = {
-        'filename' : fd,
-        }
-    # u = urllib2.urlopen(v_url, data)
-    req = urllib2.Request(v_url, data, {})
-    try:
-        u = urllib2.urlopen(req)
-    except urllib2.HTTPError, errobj:
-        print "HTTPError:", errobj.code
-        
-    else:
-        buf = u.read()
-        print "OK"
