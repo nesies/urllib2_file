@@ -1,64 +1,98 @@
 #!/usr/bin/env python
-####
-# Version: 0.2.1
-#  - StringIO workaround (Laurent Coustet), does not work with cStringIO
-#
-# Version: 0.2.0
-#  - UTF-8 filenames are now allowed (Eli Golovinsky)
-#  - File object is no more mandatory, Object only needs to have seek() read() attributes (Eli Golovinsky)
-#
-# Version: 0.1.0
-#  - upload is now done with chunks (Adam Ambrose)
-#
-# Version: older
-# THANKS TO:
-# bug fix: kosh @T aesaeion.com
-# HTTPS support : Ryan Grow <ryangrow @T yahoo.com>
-
 # Copyright (C) 2004,2005,2006,2008,2009,2010 Fabien SEISEN
 # 
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Lesser General Public
-# License as published by the Free Software Foundation; either
-# version 2.1 of the License, or (at your option) any later version.
+# PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2
+# --------------------------------------------
 # 
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Lesser General Public License for more details.
+# 1. This LICENSE AGREEMENT is between the Python Software Foundation
+# ("PSF"), and the Individual or Organization ("Licensee") accessing and
+# otherwise using this software ("Python") in source or binary form and
+# its associated documentation.
 # 
-# You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# 2. Subject to the terms and conditions of this License Agreement, PSF
+# hereby grants Licensee a nonexclusive, royalty-free, world-wide
+# license to reproduce, analyze, test, perform and/or display publicly,
+# prepare derivative works, distribute, and otherwise use Python
+# alone or in any derivative version, provided, however, that PSF's
+# License Agreement and PSF's notice of copyright, i.e., "Copyright (c)
+# 2001, 2002, 2003, 2004, 2005, 2006 Python Software Foundation; All Rights
+# Reserved" are retained in Python alone or in any derivative version 
+# prepared by Licensee.
 # 
-# you can contact me at: <fabien@seisen.org>
-# http://fabien.seisen.org/python/
-#
-# Also modified by Adam Ambrose (aambrose @T pacbell.net) to write data in
-# chunks (hardcoded to CHUNK_SIZE for now), so the entire contents of the file
-# don't need to be kept in memory.
-#
+# 3. In the event Licensee prepares a derivative work that is based on
+# or incorporates Python or any part thereof, and wants to make
+# the derivative work available to others as provided herein, then
+# Licensee hereby agrees to include in any such work a brief summary of
+# the changes made to Python.
+# 
+# 4. PSF is making Python available to Licensee on an "AS IS"
+# basis.  PSF MAKES NO REPRESENTATIONS OR WARRANTIES, EXPRESS OR
+# IMPLIED.  BY WAY OF EXAMPLE, BUT NOT LIMITATION, PSF MAKES NO AND
+# DISCLAIMS ANY REPRESENTATION OR WARRANTY OF MERCHANTABILITY OR FITNESS
+# FOR ANY PARTICULAR PURPOSE OR THAT THE USE OF PYTHON WILL NOT
+# INFRINGE ANY THIRD PARTY RIGHTS.
+# 
+# 5. PSF SHALL NOT BE LIABLE TO LICENSEE OR ANY OTHER USERS OF PYTHON
+# FOR ANY INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES OR LOSS AS
+# A RESULT OF MODIFYING, DISTRIBUTING, OR OTHERWISE USING PYTHON,
+# OR ANY DERIVATIVE THEREOF, EVEN IF ADVISED OF THE POSSIBILITY THEREOF.
+# 
+# 6. This License Agreement will automatically terminate upon a material
+# breach of its terms and conditions.
+# 
+# 7. Nothing in this License Agreement shall be deemed to create any
+# relationship of agency, partnership, or joint venture between PSF and
+# Licensee.  This License Agreement does not grant permission to use PSF
+# trademarks or trade name in a trademark sense to endorse or promote
+# products or services of Licensee, or any third party.
+# 
+# 8. By copying, installing or otherwise using Python, Licensee
+# agrees to be bound by the terms and conditions of this License
+# Agreement.
+# 
 """
-enable to upload files using multipart/form-data
+extend urllib2 to enable uploading files using multipart/form-data
 
-idea from:
-upload files in python:
- http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
-
-timeoutsocket.py: overriding Python socket API:
- http://www.timo-tasi.org/python/timeoutsocket.py
- http://mail.python.org/pipermail/python-announce-list/2001-December/001095.html
+I was looking for something to make me able to upload files to my photo web site (http://gallery.menalto.com/).
+Inspired by http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
 
 Example:
 
 import urllib2_file
 import urllib2
 
-data = { "foo":      "bar",
-         "libc.so.1": open("/lib/libc.so.1")
-}
+data = { 'foo':         'bar',
+         'form_name':    open("/lib/libc.so.1")
+        }
+(send something like: 'Content-Disposition: form-data; name="form_name"; filename="form_name";' )
+
+Or if you want to specify a different filename:
+data = { 'foo':         'bar',
+         'form_name':   { 'fd':          open('/lib/libresolv.so.2',
+                          'filename':    'libresolv.so'}
+        }
+(send something like: 'Content-Disposition: form-data; name="form_name"; filename="libresolv.so";' )
+
 u = urllib2.urlopen('http://site.com/path/upload.php', data)
+
+
+THANKS to:
+- bug fix: kosh @T aesaeion.com
+- HTTPS support : Ryan Grow <ryangrow @T yahoo.com>
+ - upload is now done with chunks (Adam Ambrose)
+ - UTF-8 filenames are now allowed (Eli Golovinsky)
+ - File object is no more mandatory, Object only needs to have seek() read() attributes (Eli Golovinsky)
+ - StringIO workaround (Laurent Coustet), does not work with cStringIO
+
+ Also modified by Adam Ambrose (aambrose @T pacbell.net) to write data in
+chunks (hardcoded to CHUNK_SIZE for now), so the entire contents of the file
+don't need to be kept in memory.
+
 """
+
+__author__ = 'Fabien SEISEN'
+__license__ = 'Python Software Foundation License version 2'
+__url__ = 'http://fabien.seisen.org/python/'
 
 import httplib
 import mimetools
@@ -97,8 +131,20 @@ def send_data(v_vars, v_files, boundary, sock=None):
         buffer_len += len(buffer)
 
     for (k, v) in v_files:
-        fd = v
+        name = k
         filename = k
+        if isinstance(v, dict):
+            if v.has_key('fd'):
+                fd = v['fd']
+            else:
+                raise TypeError("if value is dict, it must have keys 'fd' and 'filename'")
+            
+            if v.has_key('filename'):
+                filename = v['filename']
+            else:
+                raise TypeError("if value is dict, it must have keys 'fd' and 'filename'")
+        else:
+            fd = v
 
         if not hasattr(fd, 'seek'):
             raise TypeError("file descriptor MUST have seek attribute")
@@ -127,8 +173,8 @@ def send_data(v_vars, v_files, boundary, sock=None):
             filename = filename.encode('UTF-8')
         buffer = ''
         buffer += '--%s\r\n' % boundary
-        buffer += 'Content-Disposition: form-data; filename="%s";\r\n' \
-                  % (filename)
+        buffer += 'Content-Disposition: form-data; name="%s"; filename="%s";\r\n' \
+                  % (name, filename)
         buffer += 'Content-Type: %s\r\n' % get_content_type(filename)
         buffer += 'Content-Length: %s\r\n' % file_size
         buffer += '\r\n'
@@ -177,7 +223,14 @@ class newHTTPHandler(urllib2.BaseHandler):
                     raise TypeError, "not a valid non-string sequence or mapping object", tb
                 
             for (k, v) in data:
-                if hasattr(v, 'read'):
+                # if fd is provided with a filename
+                if isinstance(v, dict):
+                    if not v.has_key('fd'):
+                        raise TypeError("if value is dict, it must have keys 'fd' and 'filename")
+                    if not v.has_key('filename'):
+                        raise TypeError("if value is dict, it must have keys 'fd' and 'filename")
+                    v_files.append( (k, v) )
+                elif hasattr(v, 'read'):
                     v_files.append( (k, v) )
                 else:
                     v_vars.append( (k, v) )
